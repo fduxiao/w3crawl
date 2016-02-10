@@ -10,6 +10,7 @@ import (
 )
 
 var resourceExp, _ = regexp.Compile(`<link(.*?)href="(.*?)"(.*?)/?>`)
+var imageExp, _ = regexp.Compile(`<img(.*?)src="(.*?)"(.*?)/?>`)
 
 func getResource(url string) (err error) {
 	fr := fetchReq{url: url, ch: make(chan []byte)}
@@ -54,6 +55,18 @@ func (fp FileProcessor) Process(url, body string) (err error) {
 		return
 	}
 	matched := resourceExp.FindAllStringSubmatch(body, -1)
+	for _, one := range matched {
+		newURL := one[2]
+		u, err := urlUtil.Parse(newURL)
+		if err != nil {
+			break
+		}
+		if u.Host == "" {
+			newURL = scheme + "://" + host + newURL
+			go getResource(newURL)
+		}
+	}
+	matched = imageExp.FindAllStringSubmatch(body, -1)
 	for _, one := range matched {
 		newURL := one[2]
 		u, err := urlUtil.Parse(newURL)
