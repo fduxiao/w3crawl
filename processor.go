@@ -1,42 +1,30 @@
 package main
 
 import (
+	"errors"
 	"io/ioutil"
-	"net/http"
 	urlUtil "net/url"
 	"os"
 	"path"
 	"regexp"
 )
 
-var resourceVisited = map[string]bool{}
-
-var resourceExp, _ = regexp.Compile(`<link(.*?)href="(.*?)"(.*?)>(.*?)</link>`)
-
-// FileProcessor write every thing to file
-type FileProcessor struct{}
+var resourceExp, _ = regexp.Compile(`<link(.*?)href="(.*?)"(.*?)/?>`)
 
 func getResource(url string) (err error) {
-	visited, ok := resourceVisited[url]
-	if ok && visited {
-		return nil
-	}
-	resourceVisited[url] = true
-	resp, err := http.Get(url)
-	if err != nil {
+	fr := fetchReq{url: url, ch: make(chan []byte)}
+	fetchCh <- fr
+	digits, ok := <-fr.ch
+	if !ok {
+		err = errors.New("CHAN_FAILED")
 		return
 	}
-	defer resp.Body.Close()
-	digits, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return
-	}
-	Process(url, string(digits))
+	SaveURLToFile(url, digits)
 	return
 }
 
-// Process everyting into the file
-func Process(url, body string) (err error) {
+// SaveURLToFile the content of a url to file
+func SaveURLToFile(url string, digits []byte) (err error) {
 	ru, err := urlUtil.Parse(url)
 	host := ru.Host
 	fullPath := ru.Path
@@ -46,23 +34,22 @@ func Process(url, body string) (err error) {
 	}
 	dir = "./output/" + host + dir
 	fullPath = dir + filename
-	if visited, ok := resourceVisited[fullPath]; ok && visited {
-		return nil
-	}
-	resourceVisited[fullPath] = true
 	os.MkdirAll(dir, os.ModePerm)
 
-	ioutil.WriteFile(fullPath, ([]byte)(body), os.ModePerm)
+	ioutil.WriteFile(fullPath, digits, os.ModePerm)
 
 	return
 }
+
+// FileProcessor write every thing to file
+type FileProcessor struct{}
 
 // Process :
 func (fp FileProcessor) Process(url, body string) (err error) {
 	ru, err := urlUtil.Parse(url)
 	host := ru.Host
 	scheme := ru.Scheme
-	err = Process(url, body)
+	err = SaveURLToFile(url, ([]byte)(body))
 	if err != nil {
 		return
 	}

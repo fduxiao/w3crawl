@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"strconv"
 )
-
-var pageVisited = map[string]bool{}
 
 const (
 	// NEWCRAWLLING means a new go routine to crawl is starting
@@ -12,6 +12,8 @@ const (
 	// STOPCRAWLLING means a previous goroutine to crawl has ended crawlling
 	STOPCRAWLLING = iota
 )
+
+var crawlSize = 200
 
 // Fetcher defines how a page is fetched
 type Fetcher interface {
@@ -41,17 +43,11 @@ func Crawl(url string, depth int, fetcher Fetcher, processor Processor, calc cha
 		return
 	}
 
-	visited, ok := pageVisited[url]
-	// the page has been visited
-	if ok && visited {
-		return
-	}
-
-	pageVisited[url] = true
-
 	body, urls, err := fetcher.Fetch(url)
 	if err != nil {
-		fmt.Println(err)
+		if err.Error() != "CHAN_FAILED" {
+			fmt.Println(err)
+		}
 		return
 	}
 	go func() {
@@ -69,10 +65,14 @@ func Crawl(url string, depth int, fetcher Fetcher, processor Processor, calc cha
 }
 
 func main() {
-	ch := make(chan int, 200)
+	ch := make(chan int, crawlSize)
 	num := 1 // a go routine is running at the beginning
 	// go Crawl("http://golang.org/", 4, fetcher, printProcessor{}, ch)
-	go Crawl("http://w3school.com.cn/", 2, WebFetcher{}, FileProcessor{}, ch)
+	n, err := strconv.Atoi(os.Args[2])
+	if err != nil {
+		panic(err)
+	}
+	go Crawl(os.Args[1], n, WebFetcher{}, FileProcessor{}, ch)
 	for {
 		select {
 		case i := <-ch:
