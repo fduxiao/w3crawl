@@ -68,7 +68,7 @@ func StartCrawl(url string, depth int, fetcher Fetcher, processor Processor) {
 	// true part starts here
 	ch := make(chan int, crawlSize)
 	num := 1 // a go routine is running at the beginning
-	go Crawl(url, depth, WebFetcher{}, processor, ch)
+	go Crawl(url, depth, fetcher, processor, ch)
 
 	for {
 		select {
