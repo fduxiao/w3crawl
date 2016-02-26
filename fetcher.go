@@ -22,23 +22,8 @@ type fetchReq struct {
 var linkExp, _ = regexp.Compile(`<a(.*?)href="(.*?)"(.*?)>(.*?)</a>`)
 var fetchCh = make(chan fetchReq, fetchSize)
 
-// Fetch urls from internet
-func (wf WebFetcher) Fetch(url string) (body string, urls []string, err error) {
-	rawURL, err := urlUtil.Parse(url)
-	if err != nil {
-		return
-	}
-	host := rawURL.Host
-	scheme := rawURL.Scheme
-	rawURL.Fragment = "" // remove #..
-	url = rawURL.String()
-	fr := fetchReq{url: url, ch: make(chan []byte)}
-	fetchCh <- fr
-	digits, ok := <-fr.ch
-	if !ok {
-		err = errors.New("CHAN_FAILED")
-	}
-	body = string(digits)
+// GetLinks gets all links from a page
+func GetLinks(body, host, scheme string) (urls []string) {
 	matched := linkExp.FindAllStringSubmatch(body, -1)
 
 	for _, one := range matched {
@@ -56,6 +41,27 @@ func (wf WebFetcher) Fetch(url string) (body string, urls []string, err error) {
 		}
 		urls = append(urls, newURL)
 	}
+	return
+}
+
+// Fetch urls from internet
+func (wf WebFetcher) Fetch(url string) (body string, urls []string, err error) {
+	rawURL, err := urlUtil.Parse(url)
+	if err != nil {
+		return
+	}
+	host := rawURL.Host
+	scheme := rawURL.Scheme
+	rawURL.Fragment = "" // remove #..
+	url = rawURL.String()
+	fr := fetchReq{url: url, ch: make(chan []byte)}
+	fetchCh <- fr
+	digits, ok := <-fr.ch
+	if !ok {
+		err = errors.New("CHAN_FAILED")
+	}
+	body = string(digits)
+	urls = GetLinks(body, host, scheme)
 	return
 }
 

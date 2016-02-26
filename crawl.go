@@ -46,17 +46,20 @@ func Crawl(url string, depth int, fetcher Fetcher, processor Processor, calc cha
 		}
 		return
 	}
+	ch := make(chan int)
 	go func() {
 		err := processor.Process(url, body)
 		if err != nil {
 			fmt.Println(err)
 		}
+		ch <- 0
 	}()
 	for _, u := range urls {
 		// inform a new goroutine
 		calc <- NEWCRAWLLING
 		go Crawl(u, depth-1, fetcher, processor, calc)
 	}
+	<-ch
 	return
 }
 
