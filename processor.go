@@ -34,7 +34,7 @@ func SaveURLToFile(url string, digits []byte) (err error) {
 		filename = "index.html"
 	}
 	dir = "./output/" + host + dir
-	fullPath = dir + filename
+	fullPath = dir + "/" + filename
 	os.MkdirAll(dir, os.ModePerm)
 
 	ioutil.WriteFile(fullPath, digits, os.ModePerm)

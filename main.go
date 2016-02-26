@@ -1,8 +1,8 @@
 package main
 
 import (
+	"flag"
 	"fmt"
-	"os"
 	"strconv"
 )
 
@@ -65,14 +65,46 @@ func Crawl(url string, depth int, fetcher Fetcher, processor Processor, calc cha
 }
 
 func main() {
-	ch := make(chan int, crawlSize)
-	num := 1 // a go routine is running at the beginning
-	// go Crawl("http://golang.org/", 4, fetcher, printProcessor{}, ch)
-	n, err := strconv.Atoi(os.Args[2])
+	var processor Processor // used to process each url and body
+	hasPrevProcessor := false
+
+	f := flag.Bool("f", false, "use the file processor")
+	p := flag.Bool("p", false, "use the print processor")
+
+	// parse the args
+	flag.Parse()
+	args := flag.Args()
+	host := args[0]
+	n, err := strconv.Atoi(args[1])
 	if err != nil {
 		panic(err)
 	}
-	go Crawl(os.Args[1], n, WebFetcher{}, FileProcessor{}, ch)
+
+	if *f {
+		hasPrevProcessor = true
+		processor = FileProcessor{}
+	}
+	if *p {
+		pp := printProcessor{}
+		pp.ifContinue = false
+		if hasPrevProcessor {
+			pp.ifContinue = true
+			pp.another = processor
+		}
+		hasPrevProcessor = true
+		processor = pp
+	}
+
+	// no processor is specified
+	if !hasPrevProcessor {
+		processor = printProcessor{ifContinue: false}
+	}
+
+	// true part starts here
+	ch := make(chan int, crawlSize)
+	num := 1 // a go routine is running at the beginning
+	go Crawl(host, n, WebFetcher{}, processor, ch)
+
 	for {
 		select {
 		case i := <-ch:
@@ -140,11 +172,17 @@ var fetcher = fakeFetcher{
 	},
 }
 
-type printProcessor struct{}
+type printProcessor struct {
+	ifContinue bool
+	another    Processor
+}
 
 func (pp printProcessor) Process(url, body string) (err error) {
 	// fmt.Printf("found: %s %q\n", url, body)
 	fmt.Printf("found: %s\n", url)
 	err = nil
+	if pp.ifContinue {
+		err = pp.another.Process(url, body)
+	}
 	return
 }
