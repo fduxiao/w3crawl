@@ -1,7 +1,8 @@
-package main
+package w3crawl
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
 	urlUtil "net/url"
 	"os"
@@ -77,6 +78,23 @@ func (fp FileProcessor) Process(url, body string) (err error) {
 			newURL = scheme + "://" + host + newURL
 			go getResource(newURL)
 		}
+	}
+	return
+}
+
+// PrintProcessor print the url and process to the next
+type PrintProcessor struct {
+	IfContinue bool
+	Another    Processor
+}
+
+// Process process the data
+func (pp PrintProcessor) Process(url, body string) (err error) {
+	// fmt.Printf("found: %s %q\n", url, body)
+	fmt.Printf("found: %s\n", url)
+	err = nil
+	if pp.IfContinue {
+		err = pp.Another.Process(url, body)
 	}
 	return
 }
