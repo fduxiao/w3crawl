@@ -13,6 +13,7 @@ func main() {
 
 	f := flag.Bool("f", false, "use the file processor")
 	p := flag.Bool("p", false, "use the print processor")
+	b := flag.Bool("b", false, "if use the browser fetcher")
 
 	// parse the args
 	flag.Parse()
@@ -43,5 +44,11 @@ func main() {
 		processor = w3crawl.PrintProcessor{IfContinue: false}
 	}
 
-	w3crawl.StartCrawl(host, n, w3crawl.WebFetcher{}, processor)
+	var fetcher w3crawl.Fetcher
+	if *b {
+		fetcher = w3crawl.BrowserFetcher{}
+	} else {
+		fetcher = w3crawl.WebFetcher{}
+	}
+	w3crawl.StartCrawl(host, n, fetcher, processor)
 }

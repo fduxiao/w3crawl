@@ -12,6 +12,7 @@ import (
 
 var resourceExp, _ = regexp.Compile(`<link(.*?)href="(.*?)"(.*?)/?>`)
 var imageExp, _ = regexp.Compile(`<img(.*?)src="(.*?)"(.*?)/?>`)
+var jsExp, _ = regexp.Compile(`<script(.*?)src="(.*?)"(.*?)><//script>`)
 
 func getResource(url string) (err error) {
 	fr := fetchReq{url: url, ch: make(chan []byte)}
@@ -48,7 +49,7 @@ type FileProcessor struct{}
 
 // Process :
 func (fp FileProcessor) Process(url, body string) (err error) {
-	ru, err := urlUtil.Parse(url)
+	ru, _ := urlUtil.Parse(url)
 	host := ru.Host
 	scheme := ru.Scheme
 	err = SaveURLToFile(url, ([]byte)(body))
@@ -68,6 +69,18 @@ func (fp FileProcessor) Process(url, body string) (err error) {
 		}
 	}
 	matched = imageExp.FindAllStringSubmatch(body, -1)
+	for _, one := range matched {
+		newURL := one[2]
+		u, err := urlUtil.Parse(newURL)
+		if err != nil {
+			break
+		}
+		if u.Host == "" {
+			newURL = scheme + "://" + host + newURL
+			go getResource(newURL)
+		}
+	}
+	matched = jsExp.FindAllStringSubmatch(body, -1)
 	for _, one := range matched {
 		newURL := one[2]
 		u, err := urlUtil.Parse(newURL)

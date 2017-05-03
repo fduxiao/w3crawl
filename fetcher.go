@@ -3,20 +3,33 @@ package w3crawl
 import (
 	"errors"
 	"io/ioutil"
+	"log"
 	"net/http"
 	urlUtil "net/url"
+	"os/exec"
+	"path"
 	"regexp"
+	"runtime"
 )
 
 // WebFetcher fetches from the internet
 type WebFetcher struct{}
 
+// BrowserFetcher fetches from the internet with phantomjs
+type BrowserFetcher struct{}
+
 var pageVisited = map[string]bool{}
-var fetchSize = 60
+var fetchSize = 10
+
+const (
+	network   = iota
+	phantomjs = iota
+)
 
 type fetchReq struct {
 	url string
 	ch  chan []byte
+	t   int
 }
 
 var linkExp, _ = regexp.Compile(`<a(.*?)href="(.*?)"(.*?)>(.*?)</a>`)
@@ -54,7 +67,28 @@ func (wf WebFetcher) Fetch(url string) (body string, urls []string, err error) {
 	scheme := rawURL.Scheme
 	rawURL.Fragment = "" // remove #..
 	url = rawURL.String()
-	fr := fetchReq{url: url, ch: make(chan []byte)}
+	fr := fetchReq{url: url, ch: make(chan []byte), t: network}
+	fetchCh <- fr
+	digits, ok := <-fr.ch
+	if !ok {
+		err = errors.New("CHAN_FAILED")
+	}
+	body = string(digits)
+	urls = GetLinks(body, host, scheme)
+	return
+}
+
+// Fetch urls from internet
+func (wf BrowserFetcher) Fetch(url string) (body string, urls []string, err error) {
+	rawURL, err := urlUtil.Parse(url)
+	if err != nil {
+		return
+	}
+	host := rawURL.Host
+	scheme := rawURL.Scheme
+	rawURL.Fragment = "" // remove #..
+	url = rawURL.String()
+	fr := fetchReq{url: url, ch: make(chan []byte), t: phantomjs}
 	fetchCh <- fr
 	digits, ok := <-fr.ch
 	if !ok {
@@ -67,6 +101,12 @@ func (wf WebFetcher) Fetch(url string) (body string, urls []string, err error) {
 
 func serveFetch() {
 	ch := make(chan int, fetchSize)
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		panic("No caller information")
+	}
+	ppath := path.Dir(filename)
+
 	for fr := range fetchCh {
 		visited, ok := pageVisited[fr.url]
 		// the page has been visited
@@ -80,16 +120,25 @@ func serveFetch() {
 				<-ch
 				close(f.ch)
 			}()
-			resp, err := http.Get(f.url)
-			if err != nil {
-				return
+			switch f.t {
+			case network:
+				resp, err := http.Get(f.url)
+				if err != nil {
+					return
+				}
+				defer resp.Body.Close()
+				buf, err := ioutil.ReadAll(resp.Body)
+				if err != nil {
+					return
+				}
+				f.ch <- buf
+			case phantomjs:
+				buf, err := exec.Command("phantomjs", ppath+"/browser.js", f.url).Output()
+				if err != nil {
+					log.Fatal(err)
+				}
+				f.ch <- buf
 			}
-			defer resp.Body.Close()
-			buf, err := ioutil.ReadAll(resp.Body)
-			if err != nil {
-				return
-			}
-			f.ch <- buf
 		}
 		ch <- 0
 		go procfr(fr)
